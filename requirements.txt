@@ -42,3 +42,4 @@ zstandard==0.24.0
 motor
 pymongo
 python-dotenv
+flask

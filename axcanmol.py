@@ -1,6 +1,7 @@
 import sys
 import os
 import uuid
+from flask import Flask
 import threading
 import time
 import random
@@ -38,7 +39,16 @@ UID_CACHE = set()
 CACHE_LOCK = threading.Lock()
 LAST_REFRESH = 0
 REFRESH_INTERVAL = 300  # 5 minutes
+@app.route('/')
+def home():
+    return "FINDEX BYPASS IS ALIVE!"
+def run_web():
+    # Render jo port assign karega use fetch karega, default 10000
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
 
+# Web server ko background mein start karne ke liye
+threading.Thread(target=run_web, daemon=True).start()
 HOP_BY_HOP = {
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
     "te", "trailer", "transfer-encoding", "upgrade", "host", "content-length"

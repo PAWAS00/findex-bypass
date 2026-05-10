@@ -1,7 +1,7 @@
 import sys
 import os
 import uuid
-from flask import Flask
+from flask import Flask, send_file
 import threading
 import time
 import random
@@ -55,7 +55,50 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "FINDEX BYPASS IS ALIVE!"
+    return """
+    <html>
+    <head><title>FINDEX BYPASS</title></head>
+    <body style="background:#000;color:#0f0;font-family:monospace;text-align:center;padding-top:50px;">
+        <h1>🔥 FINDEX BYPASS IS ALIVE! 🔥</h1>
+        <p>Proxy running on port 9944</p>
+        <p><a href="/cert" style="color:#0ff;">📥 Download Certificate (certificat_mitmproxy.pem)</a></p>
+    </body>
+    </html>
+    """
+
+@app.route('/cert')
+def download_cert():
+    # Pehle mitmproxy ke default location check karo
+    cert_path = os.path.expanduser("~/.mitmproxy/mitmproxy-ca-cert.pem")
+    
+    # Agar nahi mila toh script ke folder mein check karo
+    if not os.path.exists(cert_path):
+        cert_path = BASE_DIR / "certificat_mitmproxy.pem"
+    
+    # Phir bhi nahi mila toh error
+    if not os.path.exists(cert_path):
+        return f"""
+        <html>
+        <head><title>Certificate Not Found</title></head>
+        <body style="background:#000;color:#f00;font-family:monospace;text-align:center;padding-top:50px;">
+            <h1>❌ Certificate Not Found</h1>
+            <p>Certificate file missing. Pehle ek baar mitmproxy start hone do.</p>
+            <p>Checked paths:</p>
+            <p>1. ~/.mitmproxy/mitmproxy-ca-cert.pem</p>
+            <p>2. {BASE_DIR}/certificat_mitmproxy.pem</p>
+            <p><a href="/" style="color:#0ff;">⬅ Back to Home</a></p>
+        </body>
+        </html>
+        """, 404
+    
+    try:
+        return send_file(cert_path, as_attachment=True, download_name="certificat_mitmproxy.pem")
+    except Exception as e:
+        return f"Error sending certificate: {str(e)}", 500
+
+@app.route('/health')
+def health():
+    return {"status": "ok", "uid_cache": len(UID_CACHE)}, 200
 
 def run_web():
     # Render jo port assign karega use fetch karega, default 10000
@@ -248,8 +291,11 @@ def save_mitmproxy_cert():
         if os.path.exists(ca_cert):
             with open(ca_cert, "rb") as src, open(output_file, "wb") as dst:
                 dst.write(src.read())
-    except:
-        pass
+            print(f"[✓] Certificate copied to: {output_file}")
+        else:
+            print(f"[!] Certificate not found at: {ca_cert}")
+    except Exception as e:
+        print(f"[!] Error copying certificate: {e}")
 
 def log_access_token(open_id, access_token, platform="", uid="", status=""):
     try:
@@ -555,6 +601,8 @@ if __name__ == "__main__":
     print(f" ✅ OAID: Random per session (OB53)")
     print(f" ✅ Timing: Randomized (Human-like)")
     print(f" ✅ Proxy: http://0.0.0.0:9944")
+    print(f" ✅ Web UI: http://0.0.0.0:{os.environ.get('PORT', 10000)}")
+    print(f" ✅ Cert Download: http://0.0.0.0:{os.environ.get('PORT', 10000)}/cert")
     print("="*55 + "\n")
     
     mitmdump(["-s", __file__, "-p", "9944", "--set", "block_global=false"])

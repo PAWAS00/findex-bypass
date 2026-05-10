@@ -23,6 +23,17 @@ from cryptography.hazmat.backends import default_backend
 from datetime import datetime, timezone
 import asyncio
 
+# ✅ Cross-platform pydivert handling
+try:
+    if sys.platform.startswith("win"):
+        import pydivert
+    else:
+        pydivert = None
+except ImportError:
+    pydivert = None
+except Exception:
+    pydivert = None
+
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -39,9 +50,13 @@ UID_CACHE = set()
 CACHE_LOCK = threading.Lock()
 LAST_REFRESH = 0
 REFRESH_INTERVAL = 300  # 5 minutes
+
+app = Flask(__name__)
+
 @app.route('/')
 def home():
     return "FINDEX BYPASS IS ALIVE!"
+
 def run_web():
     # Render jo port assign karega use fetch karega, default 10000
     port = int(os.environ.get("PORT", 10000))
@@ -49,6 +64,7 @@ def run_web():
 
 # Web server ko background mein start karne ke liye
 threading.Thread(target=run_web, daemon=True).start()
+
 HOP_BY_HOP = {
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
     "te", "trailer", "transfer-encoding", "upgrade", "host", "content-length"

@@ -1,8 +1,9 @@
 flask
 requests
 cryptography
+pycryptodome
 protobuf
-mitmproxy==12.1.2
+mitmproxy
 aioquic==1.2.0
 argon2-cffi==25.1.0
 asgiref==3.9.1

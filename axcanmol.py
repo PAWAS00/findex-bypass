@@ -60,7 +60,7 @@ def home():
     <head><title>FINDEX BYPASS</title></head>
     <body style="background:#000;color:#0f0;font-family:monospace;text-align:center;padding-top:50px;">
         <h1>🔥 FINDEX BYPASS IS ALIVE! 🔥</h1>
-        <p>Proxy running on port 8080</p>
+        <p>Proxy running on port 9944</p>
         <p><a href="/cert" style="color:#0ff;">📥 Download Certificate (certificat_mitmproxy.pem)</a></p>
     </body>
     </html>
@@ -600,9 +600,9 @@ if __name__ == "__main__":
     print(f" ✅ IP: REAL (No spoofing)")
     print(f" ✅ OAID: Random per session (OB53)")
     print(f" ✅ Timing: Randomized (Human-like)")
-    print(f" ✅ Proxy: http://0.0.0.0:8080")
+    print(f" ✅ Proxy: http://0.0.0.0:9944")
     print(f" ✅ Web UI: http://0.0.0.0:{os.environ.get('PORT', 10000)}")
     print(f" ✅ Cert Download: http://0.0.0.0:{os.environ.get('PORT', 10000)}/cert")
     print("="*55 + "\n")
     
-    mitmdump(["-s", __file__, "-p", "8080", "--set", "block_global=false"])
+    mitmdump(["-s", __file__, "-p", "9944", "--set", "block_global=false"])

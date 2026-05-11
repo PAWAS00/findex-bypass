@@ -277,7 +277,7 @@ load_whitelist()
 threading.Thread(target=auto_refresh, daemon=True).start()
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 9944))
     print(f"\n{'='*55}")
     print(" 🔥 FINDEX BYPASS - RAILWAY API SERVER 🔥")
     print(f"{'='*55}")

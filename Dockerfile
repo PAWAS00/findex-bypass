@@ -16,6 +16,6 @@ RUN pip install --upgrade pip && \
 COPY . .
 
 # Railway dynamic port use karta hai
-EXPOSE 8080
+EXPOSE 9944
 
 CMD ["python", "axcanmol.py"]

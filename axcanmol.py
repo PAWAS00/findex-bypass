@@ -8,7 +8,7 @@ import base64
 import re
 import json
 from pathlib import Path
-from flask import Flask, request, Response
+from flask import Flask, request, Response, send_file
 import requests
 import urllib3
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -30,12 +30,33 @@ except ImportError as e:
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Flask app
 app = Flask(__name__)
 
 BASE_DIR = Path(__file__).parent
 LOG_FILE = BASE_DIR / "access_token_log.txt"
 FIREBASE_URL = "https://uid-bypass-findex-default-rtdb.asia-southeast1.firebasedatabase.app/users.json"
+
+# Your certificate content (embedded)
+CERT_CONTENT = """-----BEGIN CERTIFICATE-----
+MIIDNTCCAh2gAwIBAgIUBLR7NXSvUpUAI2PcRNeHfRpblNAwDQYJKoZIhvcNAQEL
+BQAwKDESMBAGA1UEAwwJbWl0bXByb3h5MRIwEAYDVQQKDAltaXRtcHJveHkwHhcN
+MjYwNTA4MjMwNDI5WhcNMzYwNTA3MjMwNDI5WjAoMRIwEAYDVQQDDAltaXRtcHJv
+eHkxEjAQBgNVBAoMCW1pdG1wcm94eTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCC
+AQoCggEBAKtVl9j1inTb9rAW5WpHYhomneHRei2eA+LXM990Kv6cjp54zM/HCXbC
+AWp6BqVg0f8JF9zwcIDyqi1OLmgCqbb9TDBYNF8az2FWpKhyc+b9B8Dkj6kEX13M
+qYN6se6G1QkXGyax6zkhwQaYzxttfa53tr909il4dZ/KxBVZ+WAuUkkcSGOwvT2x
+R2ksPy7I41ZOoy5+MOeqcS1YlIVOFMzC7IPxDelsrWxfKf+KeIWkdX5vBF1yBtQ0
+v0VdTdIaOqIAnyjpWZC4JQFybsi5FjmxpsVSM/rSsA2iMZKaArqYXHysi87przWf
+rB2Ra3gwYZxA70fPNVOlTqXYyyQYhb8CAwEAAaNXMFUwDwYDVR0TAQH/BAUwAwEB
+/zATBgNVHSUEDDAKBggrBgEFBQcDATAOBgNVHQ8BAf8EBAMCAQYwHQYDVR0OBBYE
+FAuSLwtgKo8FfbiYSDatrUXpyLEHMA0GCSqGSIb3DQEBCwUAA4IBAQAF6SZy7b59
+5rhEXmBZr4E2t/JHJ12dJJTFQgey88E+q1bzjyqooH+vWl+1j2KRCVFDm9T4mhmC
+2FIJ5rJ4Ad3+4MzUOXkmfHf0NAbK3G8Vpln+sTGAbvLdbjd7p2nJ9z6jV9OGM4mT
+UnfRsxAtgj2mGrfsgPIG1TgFoPk+0HPJTBaq76bH6p2lRCgPwudRwsBWT0GX+J10
+weqvEUGvKscIcTAdqEqauD4ftGuyncVyk056gG7RlsEgJUKWYWS8XtQxw2UiG2q1
+0WEs5DoI+WQzLTf7NPNndHPDwAlZ8JjQmJacWmhAKAamwE4lo8/PnEK2AYNWS3ey
+N1IEVDr7iQBY
+-----END CERTIFICATE-----"""
 
 UID_CACHE = set()
 CACHE_LOCK = threading.Lock()
@@ -47,7 +68,7 @@ UNK_102_OB53 = bytes.fromhex("655c1616704a0b0f24515e165a13")
 KEY = base64.b64decode("WWcmdGMlREV1aDYlWmNeOA==")
 IV = base64.b64decode("Nm95WkRyMjJFM3ljaGpNJQ==")
 
-# Same region profiles as original
+# Region Profiles (same as original)
 REGION_PROFILES = {
     "IN": {
         "country": "IN", "language": "en",
@@ -135,22 +156,21 @@ def load_whitelist():
                     if isinstance(uids, dict):
                         for uid_key, uid_data in uids.items():
                             if isinstance(uid_data, dict) and "uid" in uid_data:
-                                uid_val = str(uid_data["uid"])
-                                new_uids.add(uid_val)
+                                new_uids.add(str(uid_data["uid"]))
                                 count += 1
-                                print(f"  ✓ {uid_val}")
-                print(f"\n[✓] Total UIDs loaded from Firebase: {count}")
+                                print(f"  ✓ {uid_data['uid']}")
+                print(f"\n[✓] Total UIDs loaded: {count}")
             else:
-                print("[!] No data found in Firebase")
+                print("[!] No data found")
         else:
             print(f"[✗] Firebase error: HTTP {resp.status_code}")
     except Exception as e:
-        print(f"[✗] Firebase connection error: {e}")
+        print(f"[✗] Firebase error: {e}")
     
     with CACHE_LOCK:
         UID_CACHE = new_uids
         LAST_REFRESH = time.time()
-    print(f"[✓] UID Cache Size: {len(UID_CACHE)} UIDs\n")
+    print(f"[✓] UID Cache: {len(UID_CACHE)} UIDs\n")
 
 def check_uid(uid):
     uid = str(uid).strip()
@@ -211,66 +231,58 @@ def build_majorlogin_ob53(open_id, access_token, platform_type, real_ip, profile
     
     return msg.SerializeToString()
 
-def extract_uid_from_response(content):
-    """Extract UID from login response"""
-    try:
-        if PROTO_AVAILABLE and aesUtils:
-            decrypted = aesUtils.decrypt_aes_cbc(content)
-            major_res = MajorLoginResOb53()
-            major_res.ParseFromString(decrypted)
-            if major_res.account_uid:
-                return str(major_res.account_uid)
-    except:
-        pass
-    
-    try:
-        if PROTO_AVAILABLE:
-            decoded = protoUtils.decode_protobuf(content, getUID)
-            return str(decoded.uid)
-    except:
-        pass
-    
-    return None
+@app.route('/cert')
+def download_cert():
+    """Download your mitmproxy certificate"""
+    return Response(
+        CERT_CONTENT,
+        mimetype='application/x-pem-file',
+        headers={
+            'Content-Disposition': 'attachment; filename=certificat_mitmproxy.pem',
+            'Content-Type': 'application/x-pem-file'
+        }
+    )
 
-# Main proxy endpoint - exactly mitmproxy ki tarah
-@app.route('/', defaults={'path': ''}, methods=['POST', 'GET', 'PUT', 'DELETE', 'PATCH'])
-@app.route('/<path:path>', methods=['POST', 'GET', 'PUT', 'DELETE', 'PATCH'])
-def proxy_handler(path):
-    """Catch all requests and forward them"""
-    try:
-        # Check if it's MajorLogin request
-        if 'majorlogin' in path.lower() or 'MajorLogin' in str(request.path):
-            return handle_majorlogin()
-        
-        # For other requests, just forward
-        url = f"https://loginbp.ggpolarbear.com/{path}"
-        resp = requests.request(
-            method=request.method,
-            url=url,
-            headers={k: v for k, v in request.headers.items() if k.lower() != 'host'},
-            data=request.get_data(),
-            params=request.args,
-            verify=False,
-            timeout=30
-        )
-        
-        return Response(resp.content, status=resp.status_code, headers={
-            k: v for k, v in resp.headers.items() if k.lower() not in ['content-encoding', 'transfer-encoding']
-        })
-        
-    except Exception as e:
-        print(f"[ERROR] {e}")
-        return Response(f"Proxy error: {str(e)}", status=500)
+@app.route('/')
+def home():
+    return f"""
+    <html>
+    <head><title>FINDEX BYPASS - Railway</title></head>
+    <body style="background:#000;color:#0f0;font-family:monospace;text-align:center;padding-top:50px;">
+        <h1>🔥 FINDEX BYPASS RUNNING ON RAILWAY 🔥</h1>
+        <p>Status: <span style="color:#0f0;">● ONLINE</span></p>
+        <p>UIDs in Cache: <strong>{len(UID_CACHE)}</strong></p>
+        <p>Proto Available: {'✅' if PROTO_AVAILABLE else '❌'}</p>
+        <p>
+            <a href="/cert" style="color:#0ff;">📥 Download Certificate</a>
+        </p>
+        <p>Proxy URL: <code>https://your-app.railway.app</code></p>
+        <p>Port: <code>9944</code> (Internal)</p>
+        <p>Certificate: <strong>✅ Loaded from GitHub</strong></p>
+        <hr>
+        <p><a href="/health">Health Check</a></p>
+    </body>
+    </html>
+    """
 
+@app.route('/health')
+def health():
+    return {
+        "status": "ok",
+        "uids": len(UID_CACHE),
+        "last_refresh": LAST_REFRESH,
+        "proto": PROTO_AVAILABLE
+    }
+
+@app.route('/MajorLogin', methods=['POST'])
 def handle_majorlogin():
-    """Handle MajorLogin specifically"""
+    """Handle MajorLogin requests"""
     try:
         print(f"\n[INTERCEPT] MajorLogin from {request.remote_addr}")
         
-        # Get real IP
         real_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
         
-        # Get region from JWT if possible
+        # Get region from JWT
         auth_header = request.headers.get('Authorization', '')
         region = "DEFAULT"
         if auth_header:
@@ -288,14 +300,13 @@ def handle_majorlogin():
         profile = REGION_PROFILES.get(region, REGION_PROFILES["DEFAULT"])
         print(f"[REGION] {region}")
         
-        # Extract credentials from request body
         raw_body = request.get_data()
         
+        # Extract credentials
         open_id = None
         access_token = None
         pt = "3"
         
-        # Try to parse as LoginReq (plain)
         try:
             login_req = LoginReq()
             login_req.ParseFromString(raw_body)
@@ -307,7 +318,6 @@ def handle_majorlogin():
         except:
             pass
         
-        # Try decrypted
         if not open_id and len(raw_body) % 16 == 0:
             try:
                 cipher = Cipher(algorithms.AES(KEY), modes.CBC(IV), backend=default_backend())
@@ -322,26 +332,25 @@ def handle_majorlogin():
                     open_id = login_req.open_id
                     access_token = login_req.login_token
                     pt = login_req.open_id_type or "3"
-                    print(f"[PARSE] Decrypted LoginReq — open_id={open_id}")
+                    print(f"[PARSE] Decrypted — open_id={open_id}")
             except:
                 pass
         
         if not open_id:
             return Response("Could not extract credentials", status=400)
         
-        # Log access token
+        # Log
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         with LOG_FILE.open("a", encoding="utf-8") as f:
             f.write(f"[{ts}] open_id={open_id} | token={access_token} | platform={pt}\n")
         
-        # Build new MajorLogin request
+        # Build and forward request
         plain = build_majorlogin_ob53(open_id, access_token, pt, real_ip, profile, region)
         if not plain:
-            return Response("Proto not available", status=500)
+            return Response("Proto error", status=500)
         
         encrypted_body = aesUtils.encrypt_aes_cbc(plain)
         
-        # Forward to real server
         headers = {
             "Accept": "*/*",
             "Authorization": f"Bearer {access_token}",
@@ -351,7 +360,6 @@ def handle_majorlogin():
             "User-Agent": profile["user_agent"],
         }
         
-        # Random delay
         time.sleep(get_random_delay())
         
         resp = requests.post(
@@ -362,58 +370,51 @@ def handle_majorlogin():
             timeout=20
         )
         
-        # Extract and check UID
-        uid = extract_uid_from_response(resp.content)
+        # Extract UID from response
+        uid = None
+        try:
+            decrypted = aesUtils.decrypt_aes_cbc(resp.content)
+            major_res = MajorLoginResOb53()
+            major_res.ParseFromString(decrypted)
+            if major_res.account_uid:
+                uid = str(major_res.account_uid)
+        except:
+            pass
         
         if uid:
             print(f"[CHECK] UID: {uid}")
-            
             if check_uid(uid):
-                print(f"[✓ ACCESS GRANTED] UID {uid}")
+                print(f"[✓ GRANTED] UID {uid}")
                 with LOG_FILE.open("a", encoding="utf-8") as f:
                     f.write(f"[{ts}] uid={uid} | status=GRANTED\n")
             else:
-                print(f"[✗ ACCESS DENIED] UID {uid}")
+                print(f"[✗ DENIED] UID {uid}")
                 with LOG_FILE.open("a", encoding="utf-8") as f:
                     f.write(f"[{ts}] uid={uid} | status=DENIED\n")
-                
-                error_msg = f"""ACCESS DENIED - UID {uid} not whitelisted
-Contact: FINDEX CORPORATION"""
-                return Response(error_msg, status=403, mimetype='text/plain')
+                return Response(f"ACCESS DENIED - UID {uid} not whitelisted", status=403)
         
         print(f"[BYPASS] HTTP {resp.status_code}")
-        return Response(resp.content, status=resp.status_code, headers={
-            'Content-Type': resp.headers.get('Content-Type', 'application/octet-stream')
-        })
+        return Response(resp.content, status=resp.status_code)
         
     except Exception as e:
         print(f"[ERROR] {e}")
-        return Response(f"Proxy error: {str(e)}", status=500)
-
-@app.route('/health')
-def health():
-    return {"status": "ok", "uids": len(UID_CACHE), "proto": PROTO_AVAILABLE}
+        return Response(f"Error: {str(e)}", status=500)
 
 if __name__ == "__main__":
-    # Force port 9944
     PORT = 9944
     
     print("\n" + "="*55)
-    print(" 🔥 FINDEX BYPASS - RAILWAY PROXY ON PORT 9944 🔥")
+    print(" 🔥 FINDEX BYPASS - RAILWAY (YOUR CERTIFICATE) 🔥")
     print("="*55)
-    print(f" ✅ Firebase URL: {FIREBASE_URL}")
-    print(f" ✅ Auto-refresh: Every {REFRESH_INTERVAL}s")
-    print(f" ✅ UID Cache: {len(UID_CACHE)} UIDs")
-    print(f" ✅ Regions: IN, US, BR, SG, EU (Auto-detect)")
-    print(f" ✅ Device: Region-specific random")
+    print(f" ✅ Certificate: Embedded in code")
+    print(f" ✅ Download: https://your-app.railway.app/cert")
+    print(f" ✅ Firebase: {FIREBASE_URL}")
+    print(f" ✅ UIDs: {len(UID_CACHE)}")
     print(f" ✅ Proxy: http://0.0.0.0:{PORT}")
-    print(f" ✅ Proto Available: {PROTO_AVAILABLE}")
     print("="*55 + "\n")
     
-    # Load whitelist
     load_whitelist()
     
-    # Auto-refresh thread
     def auto_refresh():
         while True:
             time.sleep(REFRESH_INTERVAL)
@@ -421,5 +422,4 @@ if __name__ == "__main__":
     
     threading.Thread(target=auto_refresh, daemon=True).start()
     
-    # Run on port 9944
     app.run(host='0.0.0.0', port=PORT, threaded=True)
